@@ -18,18 +18,27 @@ import (
 )
 
 func main() {
+	log.Println("Running...")
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	//http.Handle("/", http.FileServer(http.Dir(".")))
+	http.HandleFunc("/healthcheck", healthcheck)
 	http.HandleFunc("/createPeerConnection", createPeerConnection)
 	// http.HandleFunc("/closeConnection", onCloseByController)
 	panic(http.ListenAndServe(":8080", nil))
 }
 
+func healthcheck(w http.ResponseWriter, r *http.Request) {
+	log.Println("Working")
+	w.Write([]byte("OK"))
+}
+
 func createPeerConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	log.Println("Working!")
 
+	//peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		panic(err)
@@ -57,6 +66,10 @@ func createPeerConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	processRTCP(rtpSender)
 
+	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		fmt.Printf("Connection State has changed %s \n", connectionState.String())
+	})
+
 	var offer webrtc.SessionDescription
 
 	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
@@ -78,7 +91,7 @@ func createPeerConnection(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-
+	
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(response); err != nil {
 		panic(err)
@@ -89,8 +102,7 @@ func createPeerConnection(w http.ResponseWriter, r *http.Request) {
 	log.Println(eventID)
 
 	go rtpToTrack(videoTrack, &codecs.VP8Packet{}, 90000, 5004)
-	rtpToTrack(audioTrack, &codecs.OpusPacket{}, 48000, 5006)
-	//addNewClient/(eventID, audioTrack, videoTrack)
+	go rtpToTrack(audioTrack, &codecs.OpusPacket{}, 48000, 5006)
 }
 
 // Read incoming RTCP packets
@@ -111,7 +123,7 @@ func processRTCP(rtpSender *webrtc.RTPSender) {
 // Listen for incoming packets on a port and write them to a Track
 func rtpToTrack(track *webrtc.TrackLocalStaticSample, depacketizer rtp.Depacketizer, sampleRate uint32, port int) {
 	// Open a UDP Listener for RTP Packets on port 5004
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: port})
+	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(CHANGEME), Port: port})
 	if err != nil {
 		panic(err)
 	}
